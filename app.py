@@ -336,9 +336,9 @@ def load_biodata():
     try:
         df = pd.read_csv(BIODATA_FILE)
         df.columns = df.columns.str.strip()
-        # Pastikan kolom username ada dan lowercase untuk case-insensitive comparison
-        if 'username' in df.columns:
-            df['username'] = df['username'].str.strip().str.lower()
+        # Pastikan kolom username_bps ada dan lowercase untuk case-insensitive comparison
+        if 'username_bps' in df.columns:
+            df['username_bps'] = df['username_bps'].str.strip().str.lower()
         # Pastikan NIP dalam format string
         if 'nip' in df.columns:
             df['nip'] = df['nip'].astype(str).str.strip()
@@ -346,50 +346,53 @@ def load_biodata():
     except Exception as e:
         st.error(f"Error loading biodata: {e}")
         # Data sample untuk fallback (tanpa satker)
-        data = """username,nama,nip
+        data = """username_bps,nama,nip
 thomson,Thomson,200104052024121001
 john,John Doe,199001012020121001
 jane,Jane Smith,199502022021011002"""
         
         from io import StringIO
         df = pd.read_csv(StringIO(data))
-        df['username'] = df['username'].str.strip().str.lower()
+        df['username_bps'] = df['username_bps'].str.strip().str.lower()
         df['nip'] = df['nip'].astype(str).str.strip()
         return df
 
-def check_username_exists(username):
-    """Cek apakah username terdaftar di biodata"""
+def check_username_exists(username_bps):
+    """Cek apakah username_bps terdaftar di biodata"""
     df_biodata = load_biodata()
-    username_lower = username.strip().lower()
-    return username_lower in df_biodata['username'].values
+    username_lower = username_bps.strip().lower()
+    return username_lower in df_biodata['username_bps'].values
 
-def check_username_taken(username):
-    """Cek apakah username sudah pernah mengerjakan survey"""
+def check_username_taken(username_bps):
+    """Cek apakah username_bps sudah pernah mengerjakan survey"""
     df_results = load_results()
     if df_results.empty:
         return False
-    username_lower = username.strip().lower()
-    # Case-insensitive comparison
-    df_results['username_bps_lower'] = df_results['username_bps'].str.strip().str.lower()
+    username_lower = username_bps.strip().lower()
+    # Case-insensitive comparison dengan pengecekan tipe data
+    if 'username_bps' not in df_results.columns:
+        return False
+    # Konversi ke string terlebih dahulu untuk menghindari error
+    df_results['username_bps_lower'] = df_results['username_bps'].astype(str).str.strip().str.lower()
     return username_lower in df_results['username_bps_lower'].values
 
-def get_user_info(username):
-    """Ambil informasi user dari biodata berdasarkan username"""
+def get_user_info(username_bps):
+    """Ambil informasi user dari biodata berdasarkan username_bps"""
     df_biodata = load_biodata()
-    username_lower = username.strip().lower()
-    user_data = df_biodata[df_biodata['username'] == username_lower]
+    username_lower = username_bps.strip().lower()
+    user_data = df_biodata[df_biodata['username_bps'] == username_lower]
     if not user_data.empty:
         user_info = {
-            'username': user_data.iloc[0]['username'],
+            'username_bps': user_data.iloc[0]['username_bps'],
             'nama': user_data.iloc[0]['nama'],
             'nip': str(user_data.iloc[0]['nip'])
         }
         return user_info
     return None
 
-def validate_nip(username, nip_input):
-    """Validasi apakah NIP sesuai dengan username di biodata"""
-    user_info = get_user_info(username)
+def validate_nip(username_bps, nip_input):
+    """Validasi apakah NIP sesuai dengan username_bps di biodata"""
+    user_info = get_user_info(username_bps)
     if user_info:
         return user_info['nip'] == str(nip_input).strip()
     return False
@@ -577,6 +580,27 @@ def display_results(aspect_scores, aspect_dimensions, user_data=None):
     
     top_10 = sorted_aspects[:10]
     
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader("📖 Detail Arti Aspek Top 10")
+    for idx, (aspect, score) in enumerate(top_10):
+        dimension = aspect_dimensions.get(aspect, 'Unknown')
+        color = DIMENSION_COLORS.get(dimension, '#gray')
+        arti = aspect_meanings.get(aspect, 'Tidak ada deskripsi')
+        
+        with st.expander(f"#{idx + 1} {aspect} - Lihat Penjelasan", expanded=False):
+            st.markdown(f"""
+            <div style="padding: 15px; background: linear-gradient(135deg, {color}10 0%, {color}20 100%); 
+                        border-radius: 10px; border-left: 4px solid {color};">
+                <h4 style="color: {color}; margin-top: 0;">📌 {aspect}</h4>
+                <p style="color: #666; font-size: 15px; line-height: 1.6; margin: 10px 0;">
+                    <b>Arti:</b> {arti}
+                </p>
+                <p style="color: #999; font-size: 13px; margin: 10px 0 0 0;">
+                    <b>Dimensi:</b> {dimension} | <b>Skor Anda:</b> <span style="color: {color}; font-weight: 700;">{score}</span>
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+    
     fig_top = go.Figure()
     
     for aspect, score in top_10:
@@ -600,8 +624,8 @@ def display_results(aspect_scores, aspect_dimensions, user_data=None):
     
     fig_top.update_layout(
         title={
-            'text': "Top 10 Aspek Dominan",
-            'font': {'size': 24, 'family': 'Poppins', 'weight': 'bold'}
+            'text': "<b>Top 10 Aspek Dominan</b>",
+            'font': {'size': 24, 'family': 'Poppins'}
         },
         xaxis_title="Skor",
         yaxis_title="",
@@ -662,7 +686,7 @@ def display_results(aspect_scores, aspect_dimensions, user_data=None):
     fig_bottom.update_layout(
         title={
             'text': "5 Aspek yang Perlu Dikembangkan",
-            'font': {'size': 24, 'family': 'Poppins', 'weight': 'bold'}
+            'font': {'size': 24, 'family': 'Poppins'}
         },
         xaxis_title="Skor",
         yaxis_title="",
@@ -716,7 +740,7 @@ def user_data_form():
     
     
     # Info box
-    st.info("ℹ️ **Petunjuk:** Masukkan username BPS dan NIP Anda yang telah terdaftar di database, serta pilih asal satker Anda")
+    st.info("ℹ️ **Petunjuk:** Masukkan username_bps BPS dan NIP Anda yang telah terdaftar di database, serta pilih asal satker Anda")
     
     with st.form("user_data_form"):
         st.markdown("### 👤 Informasi Peserta")
@@ -751,19 +775,19 @@ def user_data_form():
                 st.error("❌ NIP harus berupa angka!")
                 return None
             
-            # Validasi 1: Cek apakah username terdaftar di biodata
+            # Validasi 1: Cek apakah username_bps terdaftar di biodata
             if not check_username_exists(username_clean):
                 st.error(f"❌ Username '{username_clean}' tidak terdaftar dalam database!")
-                st.warning("💡 Pastikan username BPS Anda sudah terdaftar. Hubungi admin jika ada masalah.")
+                st.warning("💡 Pastikan username_bps BPS Anda sudah terdaftar. Hubungi admin jika ada masalah.")
                 return None
             
-            # Validasi 2: Cek apakah NIP sesuai dengan username
+            # Validasi 2: Cek apakah NIP sesuai dengan username_bps
             if not validate_nip(username_clean, nip_clean):
-                st.error(f"❌ NIP tidak sesuai dengan username '{username_clean}'!")
+                st.error(f"❌ NIP tidak sesuai dengan username_bps '{username_clean}'!")
                 st.warning("⚠️ Pastikan NIP yang Anda masukkan sesuai dengan data registrasi Anda.")
                 return None
             
-            # Validasi 3: Cek apakah username sudah pernah mengerjakan survey
+            # Validasi 3: Cek apakah username_bps sudah pernah mengerjakan survey
             if check_username_taken(username_clean):
                 st.error(f"❌ Username '{username_clean}' sudah pernah mengerjakan survey!")
                 st.warning("⚠️ Setiap pegawai hanya dapat mengerjakan survey satu kali. Hasil Anda sudah tersimpan.")
@@ -790,8 +814,8 @@ def user_data_form():
         **Jika Anda mengalami masalah:**
         
         1. **Username tidak terdaftar:**
-           - Pastikan username BPS Anda sudah terdaftar di sistem
-           - Hubungi admin untuk mendaftarkan username Anda
+           - Pastikan username_bps BPS Anda sudah terdaftar di sistem
+           - Hubungi admin untuk mendaftarkan username_bps Anda
         
         2. **NIP tidak sesuai:**
            - Pastikan NIP yang diinput sesuai dengan NIP di data registrasi
@@ -801,7 +825,7 @@ def user_data_form():
            - Setiap pegawai hanya dapat mengerjakan survey satu kali
            - Hubungi admin jika perlu melihat hasil survey Anda
         
-        4. **Lupa username atau NIP:**
+        4. **Lupa username_bps atau NIP:**
            - Hubungi admin untuk mengecek data Anda
         
         5. **Satker:**
@@ -1679,9 +1703,9 @@ def show_participant_data(df_results):
     """Tampilkan data peserta"""
     st.header("👥 Data Lengkap Peserta")
     
-    # Tambahkan info jumlah username unik
+    # Tambahkan info jumlah username_bps unik
     unique_users = df_results['username_bps'].nunique()
-    st.info(f"📊 Total username unik yang sudah mengerjakan survey: **{unique_users}** dari **{len(df_results)}** records")
+    st.info(f"📊 Total username_bps unik yang sudah mengerjakan survey: **{unique_users}** dari **{len(df_results)}** records")
     
     # Filter berdasarkan satker
     if 'satker' in df_results.columns:
@@ -1712,10 +1736,10 @@ def show_participant_data(df_results):
         hide_index=True
     )
     
-    # Tambahkan fitur search username
+    # Tambahkan fitur search username_bps
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("🔍 Cek Username")
-    search_username = st.text_input("Masukkan username untuk mengecek status:", placeholder="Contoh: thomson")
+    search_username = st.text_input("Masukkan username_bps untuk mengecek status:", placeholder="Contoh: thomson")
     
     if search_username:
         if check_username_taken(search_username):
@@ -1810,7 +1834,7 @@ def main():
         <div class="sidebar-info">
             <p style="margin: 5px 0;"><b>📋 Cara Kerja:</b></p>
             <ul style="margin: 10px 0;">
-                <li>Validasi username otomatis</li>
+                <li>Validasi username_bps otomatis</li>
                 <li>60 pertanyaan interaktif</li>
                 <li>Pilih 3 dari 6 opsi</li>
                 <li>Perilaku Kuat atau Lemah</li>
